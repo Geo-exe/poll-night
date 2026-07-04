@@ -75,6 +75,11 @@ export default async function routes(fastify, options) {
       return AuthService.registerParticipant(request.params.id, request.body.username, request.body.avatar);
     } catch (err) {
       if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+        // Emergency reconnect: if user exists, just log them back in!
+        const existingUser = AuthService.login(request.params.id, request.body.username);
+        if (existingUser) {
+          return existingUser;
+        }
         return reply.code(409).send({ error: 'Username already taken in this session' });
       }
       throw err;
