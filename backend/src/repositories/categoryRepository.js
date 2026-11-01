@@ -12,4 +12,14 @@ export class CategoryRepository {
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(id, session_id, name, scale || '1-10', weight || 1.0, display_order);
   }
+
+  static update(id, { name, scale, weight, display_order }) {
+    db.prepare(`
+      UPDATE categories SET name = ?, scale = ?, weight = ?, display_order = ? WHERE id = ?
+    `).run(name, scale || '1-10', weight || 1.0, display_order, id);
+  }
+
+  static delete(id) {
+    db.prepare('DELETE FROM categories WHERE id = ?').run(id);
+  }
 }

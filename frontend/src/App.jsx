@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Link, Navigate } from 'react-router-dom';
 import AdminDashboard from './pages/admin/AdminDashboard.jsx';
 import SessionCreate from './pages/admin/SessionCreate.jsx';
+import SessionEdit from './pages/admin/SessionEdit.jsx';
 import SessionLive from './pages/admin/SessionLive.jsx';
 import AdminAuth from './pages/admin/AdminAuth.jsx';
 import MobileSession from './pages/mobile/MobileSession.jsx';
@@ -13,6 +14,7 @@ function App() {
         <Route path="/admin" element={<AdminAuth><AdminDashboard /></AdminAuth>} />
         <Route path="/admin/create" element={<AdminAuth><SessionCreate /></AdminAuth>} />
         <Route path="/admin/session/:id" element={<AdminAuth><SessionLive /></AdminAuth>} />
+        <Route path="/admin/session/:id/edit" element={<AdminAuth><SessionEdit /></AdminAuth>} />
         <Route path="/join" element={<MobileSession />} />
         <Route path="/join/:id" element={<MobileSession />} />
         <Route path="/tv" element={<TvDisplay />} />

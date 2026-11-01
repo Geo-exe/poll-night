@@ -2,11 +2,11 @@ import { db } from '../db.js';
 
 export class ItemRepository {
   static findBySessionId(sessionId) {
-    return db.prepare('SELECT id, public_name, real_name, display_order, image_url, voting_status, revealed, active_category_id, attributes FROM items WHERE session_id = ? ORDER BY display_order').all(sessionId);
+    return db.prepare('SELECT id, public_name, real_name, display_order, image_url, voting_status, revealed, active_category_id, attributes, voting_opened_at FROM items WHERE session_id = ? ORDER BY display_order').all(sessionId);
   }
 
   static findById(id) {
-    return db.prepare('SELECT id, public_name, real_name, display_order, image_url, voting_status, revealed, active_category_id, attributes FROM items WHERE id = ?').get(id);
+    return db.prepare('SELECT id, public_name, real_name, display_order, image_url, voting_status, revealed, active_category_id, attributes, voting_opened_at FROM items WHERE id = ?').get(id);
   }
 
   static findActiveItem(sessionId) {
@@ -21,8 +21,26 @@ export class ItemRepository {
     `).run(id, session_id, public_name, real_name || null, display_order, image_url || null, JSON.stringify(attributes || []));
   }
 
+  static update(id, { public_name, real_name, display_order, image_url, attributes }) {
+    db.prepare(`
+      UPDATE items SET public_name = ?, real_name = ?, display_order = ?, image_url = ?, attributes = ? WHERE id = ?
+    `).run(public_name, real_name || null, display_order, image_url || null, JSON.stringify(attributes || []), id);
+  }
+
+  static delete(id) {
+    db.prepare('DELETE FROM items WHERE id = ?').run(id);
+  }
+
   static updateVotingStatus(id, sessionId, status) {
     db.prepare('UPDATE items SET voting_status = ? WHERE id = ? AND session_id = ?').run(status, id, sessionId);
+  }
+
+  static openVoting(id, sessionId) {
+    db.prepare(`
+      UPDATE items
+      SET voting_status = 'open', voting_opened_at = ?
+      WHERE id = ? AND session_id = ?
+    `).run(Date.now(), id, sessionId);
   }
 
   static updateActiveCategory(id, sessionId, categoryId) {

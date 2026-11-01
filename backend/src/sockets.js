@@ -33,6 +33,19 @@ export default function setupSockets(io) {
       }
     });
 
+    socket.on('reaction', ({ sessionId, userId, username, avatar, emoji }) => {
+      if (sessionId && emoji) {
+        io.to(sessionId).emit('reaction', {
+          id: Date.now() + Math.random().toString(36).substring(7),
+          userId,
+          username,
+          avatar,
+          emoji,
+          timestamp: Date.now()
+        });
+      }
+    });
+
     socket.on('disconnect', () => {
       console.log('Client disconnected:', socket.id);
       if (socket.userId && socket.sessionId) {

@@ -21,6 +21,8 @@ const initDb = () => {
       reveal_mode TEXT NOT NULL CHECK (reveal_mode IN ('per_item', 'end_of_event')),  
       category_mode TEXT NOT NULL DEFAULT 'all',
       results_mode TEXT NOT NULL DEFAULT 'per_item',
+      closed_slide INTEGER NOT NULL DEFAULT 0,
+      closed_slide_locked INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL  
     );
 
@@ -46,6 +48,7 @@ const initDb = () => {
       image_url TEXT,
       active_category_id TEXT,
       attributes TEXT DEFAULT '[]',
+      voting_opened_at INTEGER NOT NULL DEFAULT 0,
       FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE  
     );
 
@@ -71,6 +74,13 @@ const initDb = () => {
       FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,  
       UNIQUE(participant_id, item_id, category_id)  
     );
+
+    CREATE TABLE IF NOT EXISTS attribute_presets (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      attributes TEXT NOT NULL DEFAULT '[]',
+      created_at INTEGER NOT NULL
+    );
   `);
 
   try {
@@ -94,7 +104,23 @@ const initDb = () => {
   } catch (e) {}
 
   try {
+    db.exec("ALTER TABLE items ADD COLUMN voting_opened_at INTEGER NOT NULL DEFAULT 0");
+  } catch (e) {}
+
+  try {
     db.exec("ALTER TABLE sessions ADD COLUMN closed_view TEXT NOT NULL DEFAULT 'review'");
+  } catch (e) {}
+
+  try {
+    db.exec("ALTER TABLE sessions ADD COLUMN shared_attributes TEXT NOT NULL DEFAULT '[]'");
+  } catch (e) {}
+
+  try {
+    db.exec("ALTER TABLE sessions ADD COLUMN closed_slide INTEGER NOT NULL DEFAULT 0");
+  } catch (e) {}
+
+  try {
+    db.exec("ALTER TABLE sessions ADD COLUMN closed_slide_locked INTEGER NOT NULL DEFAULT 0");
   } catch (e) {}
 
   try {
@@ -113,9 +139,12 @@ const initDb = () => {
           category_mode TEXT NOT NULL DEFAULT 'all',
           results_mode TEXT NOT NULL DEFAULT 'per_item',
           created_at INTEGER NOT NULL,
-          closed_view TEXT NOT NULL DEFAULT 'review'
+          closed_view TEXT NOT NULL DEFAULT 'review',
+          shared_attributes TEXT NOT NULL DEFAULT '[]',
+          closed_slide INTEGER NOT NULL DEFAULT 0,
+          closed_slide_locked INTEGER NOT NULL DEFAULT 0
         );
-        INSERT INTO new_sessions SELECT id, name, date, status, blind_mode, reveal_mode, category_mode, results_mode, created_at, closed_view FROM sessions;
+        INSERT INTO new_sessions SELECT id, name, date, status, blind_mode, reveal_mode, category_mode, results_mode, created_at, closed_view, shared_attributes, closed_slide, closed_slide_locked FROM sessions;
         DROP TABLE sessions;
         ALTER TABLE new_sessions RENAME TO sessions;
         COMMIT;

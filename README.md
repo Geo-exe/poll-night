@@ -23,10 +23,20 @@ It splits the experience into three synchronized views:
 
 - **Real-Time Syncing:** Everything is powered by WebSockets. The moment the admin opens voting, all TVs and mobile devices update instantly.
 - **Blind Mode:** Hide the "real name" of the products you are tasting until the host decides to reveal them on the big screen!
+- **Editable Sessions:** Add products, categories or photos right up until voting starts, without deleting and recreating the session.
+- **Shared Attributes & Presets:** Reuse attribute sets (e.g. "Brand", "Cost", "Accessory") across products, or save your own presets.
+- **Product Photos:** Upload a photo per item; it is stored as a file and referenced by URL, so it appears in the admin panel and on the TV during voting, review and the final podium.
+- **Separate Image Uploads:** Product photos and participant avatars upload individually, without inflating the session save payload. Existing inline images are migrated automatically to `backend/uploads` on startup.
 - **Dynamic Scoring:** Create custom categories (e.g., "Taste", "Texture", "Cost") with different weights and scales (1-5 or 1-10).
-- **Spectacular TV View:** Features slick `animate-in` transitions, glassmorphism UI, real-time vote tracking grids, and a massive 3D animated podium for the final results.
+- **Editable Votes on Reopen:** Reopening a product starts a new voting round, preloads everyone's previous votes and lets participants correct them without creating duplicates.
+- **Spectacular TV View:** Responsive `clamp()` typography, slick `animate-in` transitions, glassmorphism UI, real-time vote tracking, chat spotlights and a massive animated podium for the final results.
+- **Recap Carousel:** The end-of-night recap never overflows: it rotates through vertical slides every 10 seconds, includes a dedicated vote-deviation chart (σ + distribution bars), and the admin can lock it on any slide for deeper analysis.
+- **No-Overflow Voter Lists:** Voter avatars and rows scale down automatically, so the whole list always fits on screen; the chat keeps the newest messages and hides older ones.
+- **Archived Sessions:** Ended sessions are kept in a dedicated archive. You can inspect the recap, open it on a TV, or reactivate the session without losing any data.
+
+> Uploaded images live in `backend/uploads/`. Include that folder in backups together with `backend/poll-night.db`.
 - **Frictionless Mobile Joining:** No app downloads. Just scan the QR code on the TV to jump straight into the live session.
-- **Live Chat:** Participants can banter and comment on the current item directly from their phones, appearing live on the TV.
+- **Live Chat & Reactions:** Participants can banter and comment on the current item directly from their phones, and send quick reactions that float across the TV.
 
 ## 🛠️ Tech Stack
 

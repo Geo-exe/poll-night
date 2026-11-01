@@ -35,3 +35,34 @@
     transform: translateX(-100%);
   }
 }
+
+@keyframes float-up {
+  0% {
+    transform: translateY(12vh) scale(0.5) rotate(-8deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0) scale(1.08) rotate(4deg);
+  }
+  100% {
+    transform: translateY(-85vh) scale(1) rotate(-4deg);
+    opacity: 0;
+  }
+}
+
+.float-up {
+  animation: float-up 3.4s ease-out forwards;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
