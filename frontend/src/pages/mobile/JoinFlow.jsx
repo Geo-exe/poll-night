@@ -1,44 +1,44 @@
 import { useState, useRef } from 'react';
-import { joinSession } from '../../api';
-import { Sparkles, Camera } from 'lucide-react';
+import { joinSession, uploadImage } from '../../api';
+import { Sparkles, Camera, Loader2 } from 'lucide-react';
+import { resizeImageFile } from '../../utils/image';
+import { mediaUrl } from '../../utils/media';
 
 export default function JoinFlow({ session, onJoin }) {
   const [username, setUsername] = useState('');
   const [avatar, setAvatar] = useState('');
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef(null);
 
-  const handleImageUpload = (e) => {
+  const handleImageUpload = async (e) => {
     const file = e.target.files[0];
+    e.target.value = '';
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const size = 200;
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        
-        // Calculate cropping to center the image
-        const scale = Math.max(size / img.width, size / img.height);
-        const x = (size / scale - img.width) / 2;
-        const y = (size / scale - img.height) / 2;
-        
-        ctx.drawImage(img, x, y, img.width, img.height, 0, 0, size, size);
-        setAvatar(canvas.toDataURL('image/jpeg', 0.8));
-      };
-      img.src = event.target.result;
-    };
-    reader.readAsDataURL(file);
+    setError('');
+    setAvatarUploading(true);
+    try {
+      const avatarDataUrl = await resizeImageFile(file, { size: 200, quality: 0.8, square: true });
+      setAvatar(avatarDataUrl);
+      const uploadedUrl = await uploadImage(avatarDataUrl, 'avatar');
+      setAvatar(uploadedUrl);
+    } catch (err) {
+      setAvatar('');
+      setError(`Photo upload failed: ${err.message}`);
+    } finally {
+      setAvatarUploading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!username.trim()) return;
+    if (!username.trim() || avatarUploading) return;
+    if (avatar.startsWith('data:image')) {
+      setError('Wait for the photo upload to finish.');
+      return;
+    }
     
     try {
       const data = await joinSession(session.id, username.trim(), avatar);
@@ -86,21 +86,28 @@ export default function JoinFlow({ session, onJoin }) {
             <button 
               type="button"
               onClick={() => fileInputRef.current?.click()}
+              disabled={avatarUploading}
               className={`relative w-32 h-32 rounded-full overflow-hidden flex items-center justify-center transition-all shadow-xl group ${
                 avatar ? 'ring-4 ring-brand-500' : 'bg-zinc-800 ring-2 ring-zinc-700 hover:ring-brand-500'
               }`}
             >
               {avatar ? (
                 <>
-                  <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Camera className="text-white w-8 h-8" />
-                  </div>
+                  <img src={mediaUrl(avatar)} alt="Avatar" className="w-full h-full object-cover" />
+                  {avatarUploading ? (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                      <Loader2 className="text-white w-8 h-8 animate-spin" />
+                    </div>
+                  ) : (
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Camera className="text-white w-8 h-8" />
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="flex flex-col items-center text-zinc-400 group-hover:text-brand-400 transition-colors">
-                  <Camera className="w-10 h-10 mb-2" />
-                  <span className="text-xs font-bold uppercase tracking-wider">Add Photo</span>
+                  {avatarUploading ? <Loader2 className="w-10 h-10 mb-2 animate-spin" /> : <Camera className="w-10 h-10 mb-2" />}
+                  <span className="text-xs font-bold uppercase tracking-wider">{avatarUploading ? 'Uploading' : 'Add Photo'}</span>
                 </div>
               )}
             </button>
@@ -119,9 +126,9 @@ export default function JoinFlow({ session, onJoin }) {
             {error && <p className="text-red-400 text-sm mt-3">{error}</p>}
           </div>
           
-          <button type="submit" disabled={!username.trim()} className="w-full flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white px-6 py-4 rounded-2xl font-bold text-lg transition-all shadow-[0_0_20px_rgba(170,59,255,0.3)]">
-            <Sparkles size={20} />
-            Join Now
+          <button type="submit" disabled={!username.trim() || avatarUploading} className="w-full flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white px-6 py-4 rounded-2xl font-bold text-lg transition-all shadow-[0_0_20px_rgba(170,59,255,0.3)]">
+            {avatarUploading ? <Loader2 size={20} className="animate-spin" /> : <Sparkles size={20} />}
+            {avatarUploading ? 'Uploading photo…' : 'Join Now'}
           </button>
         </form>
       </div>

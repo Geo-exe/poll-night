@@ -10,11 +10,20 @@ export class SessionRepository {
   }
 
   static create(sessionData) {
-    const { id, name, date, blind_mode, reveal_mode, category_mode, results_mode, created_at } = sessionData;
+    const { id, name, date, blind_mode, reveal_mode, category_mode, results_mode, shared_attributes, created_at } = sessionData;
     db.prepare(`
-      INSERT INTO sessions (id, name, date, status, blind_mode, reveal_mode, category_mode, results_mode, created_at)
-      VALUES (?, ?, ?, 'setup', ?, ?, ?, ?, ?)
-    `).run(id, name, date, blind_mode ? 1 : 0, reveal_mode, category_mode, results_mode, created_at);
+      INSERT INTO sessions (id, name, date, status, blind_mode, reveal_mode, category_mode, results_mode, shared_attributes, created_at)
+      VALUES (?, ?, ?, 'setup', ?, ?, ?, ?, ?, ?)
+    `).run(id, name, date, blind_mode ? 1 : 0, reveal_mode, category_mode, results_mode, JSON.stringify(shared_attributes || []), created_at);
+  }
+
+  static updateDetails(id, sessionData) {
+    const { name, date, blind_mode, reveal_mode, category_mode, results_mode, shared_attributes } = sessionData;
+    db.prepare(`
+      UPDATE sessions
+      SET name = ?, date = ?, blind_mode = ?, reveal_mode = ?, category_mode = ?, results_mode = ?, shared_attributes = ?
+      WHERE id = ?
+    `).run(name, date, blind_mode ? 1 : 0, reveal_mode, category_mode, results_mode, JSON.stringify(shared_attributes || []), id);
   }
 
   static updateStatus(id, status) {
@@ -23,6 +32,11 @@ export class SessionRepository {
 
   static updateClosedView(id, view) {
     db.prepare('UPDATE sessions SET closed_view = ? WHERE id = ?').run(view, id);
+  }
+
+  static updateClosedSlide(id, slide, locked) {
+    db.prepare('UPDATE sessions SET closed_slide = ?, closed_slide_locked = ? WHERE id = ?')
+      .run(slide, locked ? 1 : 0, id);
   }
 
   static deleteSession(id) {

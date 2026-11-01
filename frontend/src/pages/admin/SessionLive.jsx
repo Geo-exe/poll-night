@@ -1,22 +1,20 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { fetchSessionDetails, updateSessionStatus, updateSessionClosedView, updateItemVotingStatus, revealItem, removeParticipant } from '../../api';
+import { useParams, Link } from 'react-router-dom';
+import { fetchSessionDetails, updateSessionStatus, updateSessionClosedView, updateSessionClosedSlide, updateItemVotingStatus, revealItem, removeParticipant } from '../../api';
 import { io } from 'socket.io-client';
-import { ArrowLeft, Play, Square, Eye, Users, CheckCircle2, ChevronRight, Lock, Trash2, UserX, List, BarChart2 } from 'lucide-react';
+import { ArrowLeft, Play, Square, Eye, Users, CheckCircle2, ChevronLeft, ChevronRight, Lock, UserX, List, BarChart2, Pencil, LayoutGrid, Monitor, RotateCcw } from 'lucide-react';
+import { mergeAttributes } from '../../utils/attributes';
+import { isImageSource, mediaUrl } from '../../utils/media';
+import { getReviewSlideCount, getReviewSlideLabels } from '../../utils/reviewSlides';
 
 export default function SessionLive() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const [session, setSession] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [socket, setSocket] = useState(null);
 
   useEffect(() => {
     fetchSessionDetails(id).then(data => {
-      if (data.status === 'archived') {
-        navigate('/admin');
-        return;
-      }
       setSession(data);
       setParticipants(data.participants);
     });
@@ -32,11 +30,12 @@ export default function SessionLive() {
       setParticipants(data.participants);
     });
 
+    newSocket.on('session_config_updated', (data) => {
+      setSession(data);
+      setParticipants(data.participants || []);
+    });
+
     newSocket.on('session_state_changed', (msg) => {
-      if (msg.status === 'archived') {
-        navigate('/admin');
-        return;
-      }
       setSession(s => s ? { ...s, ...msg } : s);
     });
 
@@ -77,16 +76,46 @@ export default function SessionLive() {
     await updateSessionStatus(id, newStatus);
   };
 
+  const isArchived = session.status === 'archived';
+
+  const handleReactivate = async () => {
+    if (!confirm('Riaprire questa sessione? Tornerà nello stato "closed" e sarà di nuovo visibile tra le sessioni attive.')) return;
+    await updateSessionStatus(id, 'closed');
+    setSession(current => current ? { ...current, status: 'closed' } : current);
+  };
+
+  const recapSlideCount = getReviewSlideCount(session);
+  const recapSlideLabels = getReviewSlideLabels(session);
+  const recapSlide = Math.min(
+    Math.max(Number(session.closed_slide) || 0, 0),
+    recapSlideCount - 1
+  );
+  const recapLocked = Boolean(session.closed_slide_locked);
+
+  const handleRecapSlide = async (nextSlide) => {
+    const safeSlide = Math.min(Math.max(nextSlide, 0), recapSlideCount - 1);
+    setSession(current => current ? { ...current, closed_slide: safeSlide, closed_slide_locked: 1 } : current);
+    await updateSessionClosedSlide(id, safeSlide, true);
+  };
+
+  const handleRecapAuto = async () => {
+    setSession(current => current ? { ...current, closed_slide_locked: 0 } : current);
+    await updateSessionClosedSlide(id, recapSlide, false);
+  };
+
   const handleItemOpen = async (itemId) => {
+    if (isArchived) return;
     const firstCatId = session.category_mode === 'single' && session.categories.length > 0 ? session.categories[0].id : null;
     await updateItemVotingStatus(id, itemId, 'open', firstCatId);
   };
 
   const handleItemClose = async (itemId) => {
+    if (isArchived) return;
     await updateItemVotingStatus(id, itemId, 'closed', null);
   };
 
   const handleNextCategory = async (itemId) => {
+    if (isArchived) return;
     const item = session.items.find(i => i.id === itemId);
     const currentIdx = session.categories.findIndex(c => c.id === item.active_category_id);
     if (currentIdx < session.categories.length - 1) {
@@ -102,11 +131,13 @@ export default function SessionLive() {
   };
 
   const handleReveal = async (itemId) => {
+    if (isArchived) return;
     if (!confirm('Are you sure you want to reveal this item? It cannot be reopened.')) return;
     await revealItem(id, itemId);
   };
 
   const handleKickParticipant = async (participantId) => {
+    if (isArchived) return;
     if (!confirm('Are you sure you want to remove this participant? They will be immediately logged out and lose their votes.')) return;
     await removeParticipant(id, participantId);
   };
@@ -148,6 +179,14 @@ export default function SessionLive() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            {['setup', 'joining'].includes(session.status) && (
+              <Link
+                to={`/admin/session/${id}/edit`}
+                className="flex items-center gap-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-brand-500/60 text-zinc-700 dark:text-zinc-200 px-5 py-3 rounded-xl font-medium transition-all"
+              >
+                <Pencil size={18} /> Edit Session
+              </Link>
+            )}
             {nextStatusMap[session.status] && (
               <button 
                 onClick={() => handleStatusChange(nextStatusMap[session.status].next)}
@@ -156,7 +195,7 @@ export default function SessionLive() {
                 {nextStatusMap[session.status].label} <ChevronRight size={18} />
               </button>
             )}
-            {session.status === 'closed' && session.closed_view === 'review' && (
+            {['closed', 'archived'].includes(session.status) && session.closed_view === 'review' && (
               <button 
                 onClick={() => updateSessionClosedView(id, 'podium')}
                 className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-6 py-3 rounded-xl font-medium transition-all shadow-lg shadow-amber-500/20"
@@ -164,12 +203,30 @@ export default function SessionLive() {
                 Show Podium <ChevronRight size={18} />
               </button>
             )}
-            {session.status === 'closed' && session.closed_view === 'podium' && (
+            {['closed', 'archived'].includes(session.status) && session.closed_view === 'podium' && (
               <button 
                 onClick={() => updateSessionClosedView(id, 'review')}
                 className="flex items-center gap-2 bg-zinc-700 hover:bg-zinc-600 text-white px-6 py-3 rounded-xl font-medium transition-all shadow-lg"
               >
                 <ArrowLeft size={18} /> Back to Analysis
+              </button>
+            )}
+            {['closed', 'archived'].includes(session.status) && (
+              <a
+                href={`/tv/${id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-emerald-500/60 text-zinc-700 dark:text-zinc-200 px-5 py-3 rounded-xl font-medium transition-all"
+              >
+                <Monitor size={18} /> TV Recap
+              </a>
+            )}
+            {isArchived && (
+              <button
+                onClick={handleReactivate}
+                className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-3 rounded-xl font-medium transition-all shadow-lg shadow-emerald-500/20"
+              >
+                <RotateCcw size={18} /> Riapri
               </button>
             )}
             <button 
@@ -188,6 +245,77 @@ export default function SessionLive() {
           </div>
         </header>
 
+        {isArchived && (
+          <div className="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-2xl p-4 flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-500 shrink-0">
+              <Lock size={18} />
+            </div>
+            <div>
+              <p className="font-semibold">Sessione archiviata · sola lettura</p>
+              <p className="text-sm text-zinc-500">Puoi consultare il recap e il podio, oppure riaprire la sessione per renderla di nuovo attiva.</p>
+            </div>
+          </div>
+        )}
+
+        {['closed', 'archived'].includes(session.status) && session.closed_view === 'review' && (
+          <div className="mb-8 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-brand-500/10 text-brand-500 shrink-0">
+                <LayoutGrid size={20} />
+              </div>
+              <div>
+                <h2 className="font-semibold">TV Recap Carousel</h2>
+                <p className="text-sm text-zinc-500 mt-0.5">
+                  {recapLocked
+                    ? 'Bloccato su una schermata. La TV non si muove finché non riprendi l’auto.'
+                    : 'Scorre ogni 10 secondi. Usa le frecce per bloccare la schermata che vuoi analizzare.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => handleRecapSlide(recapSlide - 1)}
+                disabled={recapSlide === 0}
+                className="p-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40 transition-colors"
+                title="Slide precedente"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <div className="min-w-28 text-center">
+                <div className="text-sm font-bold tabular-nums">Slide {recapSlide + 1} / {recapSlideCount}</div>
+                <div className={`text-[10px] font-bold uppercase tracking-widest truncate max-w-[14rem] ${recapLocked ? 'text-amber-500' : 'text-emerald-500'}`}>
+                  {recapSlideLabels[recapSlide] || 'Recap'} · {recapLocked ? 'Bloccato' : 'Auto'}
+                </div>
+              </div>
+              <button
+                onClick={() => handleRecapSlide(recapSlide + 1)}
+                disabled={recapSlide === recapSlideCount - 1}
+                className="p-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40 transition-colors"
+                title="Slide successiva"
+              >
+                <ChevronRight size={18} />
+              </button>
+              {recapLocked ? (
+                <button
+                  onClick={handleRecapAuto}
+                  className="ml-2 flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition-colors"
+                  title="Riprendi lo scorrimento automatico"
+                >
+                  <Play size={16} /> Auto
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleRecapSlide(recapSlide)}
+                  className="ml-2 flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition-colors"
+                  title="Blocca la slide selezionata"
+                >
+                  <Lock size={16} /> Blocca
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Controls (Items) */}
           <div className="lg:col-span-2 space-y-6">
@@ -199,8 +327,12 @@ export default function SessionLive() {
 
               return (
                 <div key={item.id} className={`p-6 rounded-2xl border transition-all ${item.voting_status === 'open' ? 'bg-brand-500/10 border-brand-500/50 shadow-[0_0_30px_-5px_rgba(170,59,255,0.3)]' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800'}`}>
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-4 min-w-0">
+                    {item.image_url && (
+                      <img src={mediaUrl(item.image_url)} alt={item.public_name} className="w-16 h-16 rounded-xl object-cover border border-zinc-200 dark:border-zinc-700 shrink-0" />
+                    )}
+                    <div className="min-w-0">
                     <h3 className="text-xl font-bold">{item.public_name}</h3>
                     {!session.blind_mode ? (
                       <p className="text-zinc-500 font-medium mt-1">{item.real_name}</p>
@@ -209,9 +341,9 @@ export default function SessionLive() {
                     ) : (
                       <p className="text-zinc-500 font-medium mt-1">Hidden: {item.real_name}</p>
                     )}
-                    {item.attributes && item.attributes.length > 0 && (
+                    {mergeAttributes(session.shared_attributes, item.attributes).length > 0 && (
                       <div className="flex flex-wrap gap-2 mt-2">
-                        {item.attributes.filter(a => a.key || a.value).map((attr, i) => (
+                        {mergeAttributes(session.shared_attributes, item.attributes).map((attr, i) => (
                           <span key={i} className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-xs font-semibold px-2 py-1 rounded-md">
                             {attr.key && `${attr.key}: `}{attr.value}
                           </span>
@@ -223,6 +355,7 @@ export default function SessionLive() {
                       {item.voting_status === 'open' 
                         ? `${participants.filter(p => p.has_voted_active_item).length} Votes Cast (Live)${session.category_mode === 'single' ? ` - ${session.categories.find(c => c.id === item.active_category_id)?.name || ''}` : ''}`
                         : `${item.vote_count || 0} Votes Cast`}
+                    </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -326,8 +459,8 @@ export default function SessionLive() {
                     <div className="flex items-center gap-3">
                       <div className={`w-2.5 h-2.5 rounded-full ${p.connected ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-red-500'}`} />
                       <span className="font-medium flex items-center gap-2">
-                        {p.avatar?.startsWith('data:image') ? (
-                          <img src={p.avatar} alt={p.username} className="w-6 h-6 rounded-full object-cover shadow-sm" />
+                        {isImageSource(p.avatar) ? (
+                          <img src={mediaUrl(p.avatar)} alt={p.username} className="w-6 h-6 rounded-full object-cover shadow-sm" />
                         ) : (
                           p.avatar || '👤'
                         )}

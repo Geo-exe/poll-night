@@ -4,12 +4,25 @@ import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import { Server } from 'socket.io';
 import { initDb } from './db.js';
+import { MediaService } from './services/mediaService.js';
 import routes from './routes.js';
 import setupSockets from './sockets.js';
 
 initDb();
+MediaService.migrateInlineImages();
+MediaService.cleanupOrphans();
 
-const fastify = Fastify({ logger: true });
+const fastify = Fastify({
+  logger: true,
+  // Session payloads now contain image URLs, not base64 data.
+  bodyLimit: 10 * 1024 * 1024
+});
+
+fastify.addContentTypeParser(
+  'image/jpeg',
+  { parseAs: 'buffer', bodyLimit: 10 * 1024 * 1024 },
+  (request, body, done) => done(null, body)
+);
 
 await fastify.register(cors, {
   origin: '*'

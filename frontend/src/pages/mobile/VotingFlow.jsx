@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { submitVotes, fetchParticipantVotes } from '../../api';
 import { CheckCircle2, ChevronRight, Lock, MessageCircle } from 'lucide-react';
 import MobileChat from './MobileChat';
+import { mergeAttributes } from '../../utils/attributes';
+import { mediaUrl } from '../../utils/media';
 
 export default function VotingFlow({ session, participant, socket }) {
   const activeItem = session.items.find(i => i.voting_status === 'open');
@@ -12,33 +14,36 @@ export default function VotingFlow({ session, participant, socket }) {
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [lockedPhase, setLockedPhase] = useState(null);
 
-  const currentPhaseKey = activeItem ? `${activeItem.id}-${activeItem.active_category_id || 'all'}` : null;
+  const currentPhaseKey = activeItem
+    ? `${activeItem.id}-${activeItem.active_category_id || 'all'}-${activeItem.voting_opened_at || 0}`
+    : null;
   const [initialPhase] = useState(currentPhaseKey);
-  const [initialVoted] = useState(participant.has_voted_active_item);
+  const [initialVoted] = useState(
+    participant.has_voted_current_round ?? participant.has_voted_active_item
+  );
   
   const isLocked = lockedPhase === currentPhaseKey || (currentPhaseKey === initialPhase && initialVoted);
 
   useEffect(() => {
-    if (activeItem && submittedFor !== currentPhaseKey) {
-      if (isLocked) {
-        fetchParticipantVotes(session.id, participant.id).then(fetchedVotes => {
-          const itemVotes = fetchedVotes.filter(v => v.item_id === activeItem.id);
-          const initial = {};
-          session.categories.forEach(c => {
-            const v = itemVotes.find(iv => iv.category_id === c.id);
-            initial[c.id] = v ? v.value : (c.scale === '1-5' ? 3 : 5);
-          });
-          setVotes(initial);
-        }).catch(err => console.error('Failed to fetch old votes:', err));
-      } else {
-        const initial = {};
-        session.categories.forEach(c => {
-          initial[c.id] = c.scale === '1-5' ? 3 : 5; 
-        });
-        setVotes(initial);
-      }
-    }
-  }, [activeItem, session.categories, submittedFor, isLocked, currentPhaseKey, session.id, participant.id]);
+    if (!activeItem || submittedFor === currentPhaseKey) return;
+
+    fetchParticipantVotes(session.id, participant.id).then(fetchedVotes => {
+      const itemVotes = fetchedVotes.filter(v => v.item_id === activeItem.id);
+      const initial = {};
+      session.categories.forEach(c => {
+        const v = itemVotes.find(iv => iv.category_id === c.id);
+        initial[c.id] = v ? v.value : (c.scale === '1-5' ? 3 : 5);
+      });
+      setVotes(initial);
+    }).catch(err => {
+      console.error('Failed to fetch old votes:', err);
+      const initial = {};
+      session.categories.forEach(c => {
+        initial[c.id] = c.scale === '1-5' ? 3 : 5;
+      });
+      setVotes(initial);
+    });
+  }, [activeItem, session.categories, submittedFor, currentPhaseKey, session.id, participant.id]);
 
   const handleVoteChange = (catId, val) => {
     setVotes(prev => ({ ...prev, [catId]: parseInt(val) }));
@@ -47,6 +52,10 @@ export default function VotingFlow({ session, participant, socket }) {
   const categoriesToShow = session.category_mode === 'single' && activeItem?.active_category_id
     ? session.categories.filter(c => c.id === activeItem.active_category_id)
     : session.categories;
+
+  const isCorrectionRound = Boolean(activeItem)
+    && Boolean(participant.has_voted_active_item)
+    && participant.has_voted_current_round === false;
 
   const executeSubmit = async () => {
     setIsSubmitting(true);
@@ -140,8 +149,35 @@ export default function VotingFlow({ session, participant, socket }) {
     <div className="min-h-screen bg-zinc-950 text-white pb-32">
       <header className="bg-zinc-900/90 backdrop-blur-xl sticky top-0 z-10 border-b border-zinc-800 p-6 pt-12 shadow-sm">
         <p className="text-brand-500 font-bold uppercase tracking-widest text-xs mb-1">Now Tasting</p>
-        <h1 className="text-3xl font-bold">{activeItem.public_name}</h1>
+        <div className="flex items-center gap-4">
+          {activeItem.image_url && (!session.blind_mode || activeItem.revealed) && (
+            <img src={mediaUrl(activeItem.image_url)} alt={activeItem.public_name} className="w-20 h-20 object-cover rounded-2xl border border-zinc-700 shadow-lg shrink-0" />
+          )}
+          <div className="min-w-0">
+            <h1 className="text-3xl font-bold truncate">{activeItem.public_name}</h1>
+            {(() => {
+              const attributes = mergeAttributes(session.shared_attributes, activeItem.attributes);
+              if (attributes.length === 0) return null;
+              return (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {attributes.map((attribute, index) => (
+                    <span key={index} className="bg-zinc-800 text-zinc-300 text-xs font-semibold px-2 py-1 rounded-md">
+                      {attribute.key && `${attribute.key}: `}{attribute.value}
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
       </header>
+
+      {isCorrectionRound && !isLocked && (
+        <div className="mx-6 mt-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl px-4 py-3">
+          <p className="text-amber-300 font-bold text-sm">Voting reopened</p>
+          <p className="text-amber-200/70 text-sm mt-1">Your previous votes are loaded. Correct them and submit again.</p>
+        </div>
+      )}
       
       <div className="p-6 space-y-8 mt-2">
         {categoriesToShow.map(cat => {

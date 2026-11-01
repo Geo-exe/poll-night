@@ -12,6 +12,9 @@ build/
 poll-night.db
 poll-night.db-journal
 
+# uploaded images
+backend/uploads/
+
 # logs
 npm-debug.log*
 yarn-debug.log*

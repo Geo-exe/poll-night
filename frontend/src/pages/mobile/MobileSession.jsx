@@ -37,6 +37,10 @@ export default function MobileSession() {
           setSession(s => s ? { ...s, status: msg.status || s.status, closed_view: msg.closed_view || s.closed_view } : s);
         });
 
+        newSocket.on('session_config_updated', (data) => {
+          setSession(data);
+        });
+
         newSocket.on('active_item_changed', (msg) => {
           setSession(s => s ? {
             ...s,
@@ -45,7 +49,8 @@ export default function MobileSession() {
                 return { 
                   ...it, 
                   voting_status: msg.voting_status,
-                  active_category_id: msg.active_category_id
+                  active_category_id: msg.active_category_id,
+                  voting_opened_at: msg.voting_opened_at
                 };
               }
               return msg.voting_status === 'open' ? { ...it, voting_status: 'closed' } : it;

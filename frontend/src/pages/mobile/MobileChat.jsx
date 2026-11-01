@@ -1,6 +1,14 @@
 import { useState } from 'react';
 import { Send } from 'lucide-react';
 
+const REACTIONS = [
+  '👻', '🎃', '🔥', '💀', '😂', '❤️', '🍾', '🦆',
+  '🛸', '🪠', '🥒', '🦩', '🧠', '🍍', '🦴', '🧸',
+  '🪩', '🐸', '🧄', '🦷', '🪳', '🧃', '🚽', '🦑',
+  '🥔', '🛁', '🧦', '🪿', '🤖', '🍌', '🦄', '🪨',
+  '👽', '🥑', '🫠', '🐛', '🦶', '🧀', '🥐', '🛒'
+];
+
 export default function MobileChat({ session, participant, socket }) {
   const [text, setText] = useState('');
 
@@ -15,6 +23,17 @@ export default function MobileChat({ session, participant, socket }) {
       text: text.trim(),
     });
     setText('');
+  };
+
+  const sendReaction = (emoji) => {
+    if (!socket) return;
+    socket.emit('reaction', {
+      sessionId: session.id,
+      userId: participant.id,
+      username: participant.username,
+      avatar: participant.avatar,
+      emoji,
+    });
   };
 
   return (
@@ -43,6 +62,23 @@ export default function MobileChat({ session, participant, socket }) {
             <Send size={18} />
           </button>
         </form>
+
+        <div className="mt-5">
+          <p className="text-xs text-zinc-500 uppercase font-bold tracking-widest mb-2">Quick reactions</p>
+          <div className="grid grid-cols-8 gap-1.5">
+            {REACTIONS.map(emoji => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => sendReaction(emoji)}
+                className="w-full aspect-square flex items-center justify-center text-xl bg-zinc-950 border border-zinc-800 rounded-lg hover:border-brand-500 hover:scale-110 active:scale-95 transition-all"
+                title="Send to the TV"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

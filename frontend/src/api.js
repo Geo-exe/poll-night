@@ -8,6 +8,14 @@ const getHeaders = (hasBody = true) => {
   return headers;
 };
 
+const readApiError = async (res, fallback) => {
+  if (res.status === 413) {
+    return 'Payload too large. Remove some photos or use smaller images.';
+  }
+  const errorData = await res.json().catch(() => null);
+  return errorData?.message || errorData?.error || fallback;
+};
+
 export const loginAdmin = async (password) => {
   const res = await fetch(`${API_BASE}/admin/login`, {
     method: 'POST',
@@ -48,7 +56,60 @@ export const createSession = async (data) => {
     headers: getHeaders(),
     body: JSON.stringify(data)
   });
+  if (!res.ok) throw new Error(await readApiError(res, 'Failed to create session'));
   return res.json();
+};
+
+export const updateSession = async (id, data) => {
+  const res = await fetch(`${API_BASE}/sessions/${id}`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) throw new Error(await readApiError(res, 'Failed to update session'));
+  return res.json();
+};
+
+export const fetchAttributePresets = async () => {
+  const res = await fetch(`${API_BASE}/attribute-presets`, {
+    headers: getHeaders(false)
+  });
+  if (!res.ok) throw new Error('Failed to fetch attribute presets');
+  return res.json();
+};
+
+export const createAttributePreset = async (data) => {
+  const res = await fetch(`${API_BASE}/attribute-presets`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null);
+    throw new Error(errorData?.error || 'Failed to save preset');
+  }
+  return res.json();
+};
+
+export const deleteAttributePreset = async (id) => {
+  const res = await fetch(`${API_BASE}/attribute-presets/${id}`, {
+    method: 'DELETE',
+    headers: getHeaders(false)
+  });
+  if (!res.ok) throw new Error('Failed to delete preset');
+  return res.json();
+};
+
+export const uploadImage = async (dataUrl, scope = 'item') => {
+  const blob = await (await fetch(dataUrl)).blob();
+  const res = await fetch(`${API_BASE}/uploads/${scope}`, {
+    method: 'POST',
+    headers: { ...getHeaders(false), 'Content-Type': 'image/jpeg' },
+    body: blob
+  });
+  if (!res.ok) throw new Error(await readApiError(res, 'Failed to upload image'));
+  const data = await res.json();
+  return data.url;
 };
 
 export const deleteSession = async (id) => {
@@ -76,6 +137,16 @@ export const updateSessionClosedView = async (id, view) => {
     body: JSON.stringify({ view })
   });
   if (!res.ok) throw new Error('Failed to update closed view');
+  return res.json();
+};
+
+export const updateSessionClosedSlide = async (id, slide, locked) => {
+  const res = await fetch(`${API_BASE}/sessions/${id}/closed_slide`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify({ slide, locked })
+  });
+  if (!res.ok) throw new Error('Failed to update recap slide');
   return res.json();
 };
 

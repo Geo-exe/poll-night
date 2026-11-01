@@ -16,7 +16,8 @@ export class PresenceService {
       username: p.username,
       avatar: p.avatar,
       connected: p.connected,
-      has_voted_active_item: !!p.has_voted_active_item
+      has_voted_active_item: !!p.has_voted_active_item,
+      has_voted_current_round: !!p.has_voted_current_round
     }));
 
     io.to(sessionId).emit('participant_status_update', { participants: statusList });
